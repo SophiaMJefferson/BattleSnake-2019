@@ -1,30 +1,16 @@
 import os
 import random
+import methods as m
 
 import cherrypy
 
 prevmove = "left" #initialize to something random
 
-#for adding dictionaries
-def add_dicts(d1,d2):
-  d = {"up":0,"down":0,"left":0,"right":0}
-  for k in d:
-    d[k] = d1[k]+d2[k]
-  return d
-
-#for subtracting dictionaries
-def subtract_dicts(d1,d2):
-  d = {"up":0,"down":0,"left":0,"right":0}
-  print(d1,d2,d)
-  for k in d:
-    d[k] = d1[k]-d2[k]
-  return d
-
 #Returns the opposite of a move
 def opp(amove):
     if amove == "right":
         return "left"
-    if amove == "left":
+    if amove == "left": 
         return "right"
     if amove == "up":
         return "down"
@@ -43,6 +29,19 @@ def body_coords(data):
             y = bodylist[i]["y"]
             coords.append([x, y])
     return coords
+
+#given data, makes a list of other snake (heads,names,health)
+def get_snakes(data):
+    snakes = []
+    boarddict = data["board"]
+    snakelist = boarddict["snakes"]
+    for j in range(0, len(snakelist)):#do not include my snake
+        name = snakelist[j]["name"]
+        length = len(snakelist[j]["body"])
+        head = snakelist[j]["head"] #in form {'x': 3, 'y': 1}
+        if(name!="Twister"):
+          snakes.append({"name":name,"length":length,"head":head})
+    return snakes
 
 #Returns a list of all food coords
 def food_coords(data):
@@ -75,7 +74,6 @@ class Battlesnake(object):
     @cherrypy.tools.json_in()
     def start(self):
         # This function is called everytime your snake is entered into a game.
-
         print("START")
         return "ok"
 
@@ -84,8 +82,10 @@ class Battlesnake(object):
     @cherrypy.tools.json_out()
     def move(self):
         # This function is called on every turn of a game. It's how your snake decides where to move.
-        data = cherrypy.request.json
+        move = ""
+        ATmove = "" 
 
+        data = cherrypy.request.json
         boarddict = data['board'] #coords of board
         height = boarddict['height'] - 1
         width = boarddict['width'] - 1
@@ -93,6 +93,7 @@ class Battlesnake(object):
         youdict = data["you"] #coords of my snake
         headdict = youdict["head"] #coords of my head
         health = youdict["health"] #my health value
+        length = len(youdict["body"])#my length
         #x, y coords of head
         global x
         global y
@@ -130,25 +131,42 @@ class Battlesnake(object):
             nomove.add('down')
 
         #avoid food when full
-        if health>20:
+        if health>60:
           for i in food_coords(data):
             if move_coords[key]==i:
               if len(nomove)<3:
                 nomove.add(key)
 
-        #don't go into a mouth if smaller
-        #heads of all snakes
-        #sizes of all snakes
-        #dont move into square adjacent to snake head if small
-        #do if bigger
-        
+  
+        #Do not move into an eat zone(adj to head)
+        snakes = get_snakes(data)
+        for s in range (0,len(snakes)):
+          i = snakes[s]["head"]
+          eat_coords = [[i["x"]+1,i["y"]],[i["x"]-1,i["y"]],[i["x"],i["y"]+1],[i["x"],i["y"]-1]]
+          for j in eat_coords:
+            for key in move_coords:
+                if move_coords[key] == j:
+                    if snakes[s]["length"]>=length:
+                      nomove.add(key)
+                    else: #if I am bigger, try to eat
+                      ATmove = key
+
+      
+
         #randomly pick from possible moves
-        move = random.choice(list(all_moves - nomove))
+        try:
+          move = random.choice(list(all_moves - nomove))
+        except IndexError:
+          move = prevmove
 
         #go straight forward if possible
         if prevmove not in list(nomove):
             move = prevmove
 
+        #Eat someone if possible
+        if ATmove not in list(nomove):
+          if ATmove != "":
+            move = ATmove
 
         print("nomove:", nomove)
         prevmove = move #resets previous move variable
