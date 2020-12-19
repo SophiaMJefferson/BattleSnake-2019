@@ -1,145 +1,78 @@
 import os
 import random
 import methods as m
-
+import findmoves as f
 import cherrypy
 
 prevmove = "left" #initialize to something random
 
-#Returns the opposite of a move
-def opp(amove):
-    if amove == "right":
-        return "left"
-    if amove == "left": 
-        return "right"
-    if amove == "up":
-        return "down"
-    if amove == "down":
-        return "up"
-
-#Given data, makes a list of coordinates of all snakes
-def body_coords(data):
-    coords = []
-    boarddict = data["board"]
-    snakelist = boarddict["snakes"]
-    for j in range(0, len(snakelist)):
-        bodylist = snakelist[j]["body"]
-        for i in range(0, len(bodylist)):
-            x = bodylist[i]["x"]
-            y = bodylist[i]["y"]
-            coords.append([x, y])
-    return coords
-
-#given data, makes a list of other snake (heads,names,health)
-def get_snakes(data):
-    snakes = []
-    boarddict = data["board"]
-    snakelist = boarddict["snakes"]
-    for j in range(0, len(snakelist)):#do not include my snake
-        name = snakelist[j]["name"]
-        length = len(snakelist[j]["body"])
-        head = snakelist[j]["head"] #in form {'x': 3, 'y': 1}
-        if(name!="Twister"):
-          snakes.append({"name":name,"length":length,"head":head})
-    return snakes
-
-#Returns a list of all food coords
-def food_coords(data):
-    coords = []
-    boarddict = data["board"]
-    foodlist = boarddict["food"]
-    for i in range(0, len(foodlist)):
-        x = foodlist[i]["x"]
-        y = foodlist[i]["y"]
-        coords.append([x, y])
-    return coords
-
-        
 class Battlesnake(object):
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def index(self):
-        # This function is called when you register your Battlesnake on play.battlesnake.com
-        # It controls your Battlesnake appearance and author permissions.
-        # TIP: If you open your Battlesnake URL in browser you should see this data
         return {
             "apiversion": "1",
-            "author": "",  # TODO: Your Battlesnake Username
-            "color": "#64CCCD",  # TODO: Personalize
-            "head": "bwc-scarf",  # TODO: Personalize
-            "tail": "sharp",  # TODO: Personalize
+            "author": "sophiajay",  
+            "color": "#64CCCD", 
+            "head": "bwc-scarf", 
+            "tail": "sharp",  
         }
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
     def start(self):
         # This function is called everytime your snake is entered into a game.
+
         print("START")
         return "ok"
 
+    #this function is called every move
     @cherrypy.expose
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
     def move(self):
-        # This function is called on every turn of a game. It's how your snake decides where to move.
-        move = ""
-        ATmove = "" 
-
+        #get from data
         data = cherrypy.request.json
-        boarddict = data['board'] #coords of board
-        height = boarddict['height'] - 1
-        width = boarddict['width'] - 1
 
-        youdict = data["you"] #coords of my snake
-        headdict = youdict["head"] #coords of my head
-        health = youdict["health"] #my health value
-        length = len(youdict["body"])#my length
+        height = m.height(data)
+        width = m.width(data)
+        health = data["you"]["health"] #my health value
+        length = len(data["you"]["body"])#my length
         #x, y coords of head
-        global x
-        global y
-        x = headdict["x"] 
-        y = headdict['y']
-
+        x = data["you"]["head"]["x"] 
+        y = data["you"]["head"]['y']
+        
+        #initialize variables
+        move = ""
+        ATmove = ""
+        subparmove = set([]) 
         all_moves = set(["up", "down", "left", "right"])
-        #dict of where moves will place head
-        move_coords = {
+        nomove = set([])
+        move_coords = { #dict of where moves will place head
             "up": [x, y + 1],
             "down": [x, y - 1],
             "left": [x - 1, y],
             "right": [x + 1, y]
         }
 
-        nomove = set([])
-        #add backwards to nomove dict
+        #updates nomove to inlcude backwards, bodies, walls
         global prevmove
-        nomove.add(opp(prevmove))
+        nomove = f.no_back(nomove,prevmove)
+        nomove = f.no_bodies(nomove,data,move_coords)
+        nomove = f.no_walls(nomove,data,x,y)
 
-        #avoid bodies
-        for i in body_coords(data):
+        #avoid food when full, add food to nomove
+        if health>100:
+          for i in m.food_coords(data):
             for key in move_coords:
-                if move_coords[key] == i:
-                    nomove.add(key)
-        #avoid walls
-        if x + 1 == width + 1:
-            nomove.add("right")
-        elif x - 1 == -1:
-            nomove.add('left')
+              if move_coords[key]==i:
+                if len(nomove)<3:
+                  subparmove.add(key)
 
-        if y + 1 == height + 1:
-            nomove.add("up")
-        elif y - 1 == -1:
-            nomove.add('down')
-
-        #avoid food when full
-        if health>60:
-          for i in food_coords(data):
-            if move_coords[key]==i:
-              if len(nomove)<3:
-                nomove.add(key)
 
   
-        #Do not move into an eat zone(adj to head)
-        snakes = get_snakes(data)
+        #Add eat zones(adj to head) to nomove
+        snakes = m.get_snakes(data)
         for s in range (0,len(snakes)):
           i = snakes[s]["head"]
           eat_coords = [[i["x"]+1,i["y"]],[i["x"]-1,i["y"]],[i["x"],i["y"]+1],[i["x"],i["y"]-1]]
@@ -147,26 +80,24 @@ class Battlesnake(object):
             for key in move_coords:
                 if move_coords[key] == j:
                     if snakes[s]["length"]>=length:
-                      nomove.add(key)
+                      subparmove.add(key)
                     else: #if I am bigger, try to eat
                       ATmove = key
 
-      
 
-        #randomly pick from possible moves
-        try:
+        #move priority processing
+        #ATMOVE, PREVMOVE,NOTSUBPAR,possible
+        if (ATmove not in subparmove) and (ATmove not in nomove) and (ATmove != ""):
+          move = ATmove #eating move if not subpar
+        elif (prevmove not in subparmove) and (prevmove not in nomove): 
+          move = prevmove #continue straight if not subpar
+        elif len((all_moves-nomove)-subparmove)>0:
+          #choose from good moves if not empty
+          move = random.choice(list((all_moves-nomove)-subparmove))
+        else:
+          #choose from possible moves
           move = random.choice(list(all_moves - nomove))
-        except IndexError:
-          move = prevmove
 
-        #go straight forward if possible
-        if prevmove not in list(nomove):
-            move = prevmove
-
-        #Eat someone if possible
-        if ATmove not in list(nomove):
-          if ATmove != "":
-            move = ATmove
 
         print("nomove:", nomove)
         prevmove = move #resets previous move variable
