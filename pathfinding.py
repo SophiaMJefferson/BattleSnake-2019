@@ -5,7 +5,8 @@ import methods as m
 class Node():
     """A node class for A* Pathfinding"""
 
-    def __init__(self, parent=None, position=None):
+    #def __init__(self, parent=None, position=None):
+    def __init__(self,parent, position):
         self.parent = parent
         self.position = position
 
@@ -19,9 +20,9 @@ class Node():
 #pathfind from start(head) to end
 def astar(maze, start, end):
     #initializes start and end nodes
-    start_node = Node(None, start)
+    start_node = Node(None,start)
     start_node.g = start_node.h = start_node.f = 0
-    end_node = Node(None, end)
+    end_node = Node(None,end)
     end_node.g = end_node.h = end_node.f = 0
 
     #initializes openlist and closedlist
@@ -105,16 +106,21 @@ def astar(maze, start, end):
 
 #makes a "maze" to use astar on using board data
 def make_maze(data):
+
   maze = []
   obstruct = m.body_coords(data)
   #iterate through columns in first row
   for r in range(0,11):
     row = []
     for y in range(0,11):
-      if obstruct[1] == y: #if this coord is obstructed
-        row.append(0)
-      else:
+      free = True
+      for b in obstruct:
+        if b[1] == y: #if this coord is obstructed
+          free = False
+      if free:
         row.append(1)
+      else:
+        row.append(0)
     maze.append(row)
   return maze
 

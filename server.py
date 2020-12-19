@@ -2,6 +2,7 @@ import os
 import random
 import methods as m
 import findmoves as f
+import pathfinding as p
 import cherrypy
 
 prevmove = "left" #initialize to something random
@@ -61,6 +62,7 @@ class Battlesnake(object):
         nomove = f.no_bodies(nomove,data,move_coords)
         nomove = f.no_walls(nomove,data,x,y)
 
+        """
         #avoid food when full, add food to nomove
         if health>100:
           for i in m.food_coords(data):
@@ -68,6 +70,19 @@ class Battlesnake(object):
               if move_coords[key]==i:
                 if len(nomove)<3:
                   subparmove.add(key)
+        """
+        #pathfind to food
+        pathmove = ""
+        map = p.make_maze(data)
+        food = m.food_coords(data)
+        head_coords = [data["you"]["head"]["x"],data["you"]["head"]['y']]
+        path = p.astar(map,head_coords,food[0])
+        print(map)
+        #for key in move_coords:
+          #if path[-1] == move_coords[key]:
+            #pathmove = key
+        print(path)
+        
 
 
   
@@ -89,6 +104,8 @@ class Battlesnake(object):
         #ATMOVE, PREVMOVE,NOTSUBPAR,possible
         if (ATmove not in subparmove) and (ATmove not in nomove) and (ATmove != ""):
           move = ATmove #eating move if not subpar
+        elif (pathmove not in subparmove) and (pathmove not in nomove) and (pathmove != ""):
+          move = pathmove
         elif (prevmove not in subparmove) and (prevmove not in nomove): 
           move = prevmove #continue straight if not subpar
         elif len((all_moves-nomove)-subparmove)>0:
